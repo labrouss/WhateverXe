@@ -16525,15 +16525,27 @@ bool XE::installTGLCSB12(KernelPatcher &patcher,size_t index,mach_vm_address_t a
   const auto sleepSymbol="__ZN17IGInterruptBridge15systemWillSleepEv";
   const auto irqSymbol="__ZN17IGInterruptBridge17disableInterruptsEv";
   const uint8_t entry[] {0x55,0x48,0x89,0xE5,0x53,0x50,0x48,0x89,0xFB};
-  bool sleepOK=s0IRQEntryQualified && orgTGLHostIRQClassDisable && size>0x4AB1D &&
-   patcher.solveSymbol<mach_vm_address_t>(index,sleepSymbol,address,size)==address+0x4AB14 &&
-   patcher.solveSymbol<mach_vm_address_t>(index,irqSymbol,address,size)==address+0x4A778 &&
-   !memcmp(reinterpret_cast<void *>(address+0x4AB14),entry,sizeof(entry));
+  // Diagnostic (local test build): record each qualification step separately.
+  const bool qIrq=s0IRQEntryQualified, qOrg=orgTGLHostIRQClassDisable!=0, qSize=size>0x4AB1D;
+  const auto sleepAddr=qSize ? patcher.solveSymbol<mach_vm_address_t>(index,sleepSymbol,address,size) : 0;
   patcher.clearError();
+  const auto irqAddr=qSize ? patcher.solveSymbol<mach_vm_address_t>(index,irqSymbol,address,size) : 0;
+  patcher.clearError();
+  const bool qBytes=qSize && !memcmp(reinterpret_cast<void *>(address+0x4AB14),entry,sizeof(entry));
+  bool sleepOK=qIrq && qOrg && qSize && sleepAddr==address+0x4AB14 && irqAddr==address+0x4A778 && qBytes;
+  int routeErr=-1;
   if(sleepOK) {
    KernelPatcher::RouteRequest route {sleepSymbol,tglS0WrapBridgeSystemWillSleep,tglS0OrgBridgeSystemWillSleep};
    sleepOK=patcher.routeMultiple(index,&route,1,address,size);
+   routeErr=static_cast<int>(patcher.getError());
    patcher.clearError();
+  }
+  {
+   char why[200];
+   snprintf(why,sizeof(why),"irqEntry=%d org=%d size=%d sleepSym=+0x%llx irqSym=+0x%llx bytes=%d route=%d err=%d",
+    qIrq,qOrg,qSize,sleepAddr?static_cast<unsigned long long>(sleepAddr-address):0ULL,
+    irqAddr?static_cast<unsigned long long>(irqAddr-address):0ULL,qBytes,sleepOK,routeErr);
+   root->setProperty("TGLS0SleepHookWhy",why);
   }
   __atomic_store_n(&tglS0SleepHookRouted,sleepOK,__ATOMIC_RELEASE);
   root->setProperty("TGLS0SleepHookRouted",sleepOK);
