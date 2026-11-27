@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, tgl-s0-hook-diag]
+    branches: [main, tgl-s0-hook-diag, tgl-s0-csb-0.8.6]
     tags: ['*']
   pull_request:
   workflow_dispatch:
