@@ -14064,24 +14064,6 @@ bool XE::processKextFull(KernelPatcher &patcher, size_t index, mach_vm_address_t
 				IORegistryEntry::getRegistryRoot()->setProperty("TGLRetainedHook", bool(tglRetainedModeCaller));
 				patcher.clearError();
 			}
-            // Mark FB0 display wake transitions for the AUX diagnostics.
-            if (tglActive && xeProfile.family==XELP::Family::TigerLake &&
-                !display13FramebufferRequested &&
-                checkKernelArgument("-wex-tgl-edp-refdiag")) {
-                const char *symbol="__ZN21AppleIntelFramebuffer24setFramebufferPowerStateEj";
-                const uint8_t entry[]={0x55,0x48,0x89,0xE5,0x41,0x57,0x41,0x56,
-                    0x53,0x50,0x41,0x89,0xF6,0x49,0x89,0xFF,0x48,0xFF,0x05,0xF1};
-                const auto fn=patcher.solveSymbol<mach_vm_address_t>(index,symbol,address,size);
-                const bool known=fn==address+0x24DE8 && size>0x24DE8+sizeof(entry) &&
-                    !memcmp(reinterpret_cast<void *>(fn),entry,sizeof(entry));
-                patcher.clearError();
-                KernelPatcher::RouteRequest route(symbol,wrapTGLFramebufferWakeEpoch,orgTGLFramebufferWakeEpoch);
-                const bool diagnosticRoute=known && patcher.routeMultiple(index,&route,1,address,size);
-                patcher.clearError();
-                // Keep the status property for older diagnostic readers.
-                IORegistryEntry::getRegistryRoot()->setProperty("TGLDisplayWakePWMRouteReady",false);
-                IORegistryEntry::getRegistryRoot()->setProperty("TGLEDPDiagWakeRouteReady",diagnosticRoute);
-            }
 
 			{
 				tglStreamLock = IOSimpleLockAlloc();
